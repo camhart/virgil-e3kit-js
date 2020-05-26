@@ -1,3 +1,6 @@
+## Changes made:
+This fork of https://github.com/VirgilSecurity/virgil-e3kit-js includes changes to allow multi-card support.
+
 # Virgil E3Kit TypeScript/JavaScript
 
 [![Build Status](https://travis-ci.com/VirgilSecurity/virgil-e3kit-js.svg?branch=master)](https://travis-ci.com/VirgilSecurity/virgil-e3kit-js)
@@ -46,7 +49,7 @@ Virgil E3Kit JS is provided in separate packages for different platforms:
 - [E3Kit Documentation](https://developer.virgilsecurity.com/docs/e3kit/) - start integrating E3Kit into your project with our detailed guides.
 - [E3Kit TypeScript/JavaScript API Reference](https://virgilsecurity.github.io/virgil-e3kit-js/) - E3Kit API reference for the language of your choice.
 - [Quickstart Demo](https://developer.virgilsecurity.com/docs/e3kit/get-started/quickstart/) - will help you to get started with the Virgil E3Kit quickly, and to learn some common ways to build end-to-end encryption between two fictional characters Alice and Bob.
- 
+
 ## Samples
 
 You can find examples for React Native, Webpack, Ionic, Node and UMD in the [examples folder](/examples), at our [Developer Documentation](https://developer.virgilsecurity.com/docs/e3kit/) and in the [E3kit Web Demo](https://github.com/VirgilSecurity/demo-e3kit-web).
