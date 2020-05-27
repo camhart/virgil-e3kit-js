@@ -36,6 +36,7 @@ import { Group, isValidParticipantCount } from './groups/Group';
 import { GroupManager } from './GroupManager';
 import { getCardActiveAtMoment } from './utils/card';
 import { GroupLocalStorage } from './GroupLocalStorage';
+import { IExtraData } from 'virgil-sdk/dist/types/Cards/ICard';
 
 export abstract class AbstractEThree {
     /**
@@ -105,20 +106,29 @@ export abstract class AbstractEThree {
     /**
      * Registers current user in Virgil Cloud. Saves private key locally and uploads public key to the cloud.
      */
-    async register(keyPair?: IKeyPair) {
+    async register(
+        keyPair?: IKeyPair,
+        cardFilter = (card: ICard) => {
+            return true;
+        },
+        extraFields: IExtraData = {},
+    ) {
         if (this.inProcess) {
             this.throwIllegalInvocationError('register');
         }
         this.inProcess = true;
         try {
-            const [cards, privateKey] = await Promise.all<ICard[], IPrivateKey | null>([
+            const [tempCards, privateKey] = await Promise.all<ICard[], IPrivateKey | null>([
                 this.cardManager.searchCards(this.identity),
                 this.keyLoader.loadLocalPrivateKey(),
             ]);
+
+            const cards = tempCards.filter(cardFilter);
+
             if (cards.length > 1) throw new MultipleCardsError(this.identity);
             if (cards.length > 0) throw new IdentityAlreadyExistsError();
             if (privateKey) await this.keyLoader.resetLocalPrivateKey();
-            await this.publishCardThenSavePrivateKeyLocal({ keyPair });
+            await this.publishCardThenSavePrivateKeyLocal({ keyPair, extraFields });
         } finally {
             this.inProcess = false;
         }
@@ -128,20 +138,28 @@ export abstract class AbstractEThree {
      * Generates a new private key and saves locally. Replaces old public key with new one in Cloud.
      * Used in case if old private key is lost.
      */
-    async rotatePrivateKey(): Promise<void> {
+    async rotatePrivateKey(
+        cardFilter = (card: ICard) => {
+            return true;
+        },
+        extraFields: IExtraData = {},
+    ): Promise<void> {
         if (this.inProcess) {
             this.throwIllegalInvocationError('rotatePrivateKey');
         }
         this.inProcess = true;
         try {
-            const [cards, privateKey] = await Promise.all<ICard[], IPrivateKey | null>([
+            const [tempCards, privateKey] = await Promise.all<ICard[], IPrivateKey | null>([
                 this.cardManager.searchCards(this.identity),
                 this.keyLoader.loadLocalPrivateKey(),
             ]);
+
+            const cards = tempCards.filter(cardFilter);
+
             if (cards.length === 0) throw new RegisterRequiredError();
             if (cards.length > 1) throw new MultipleCardsError(this.identity);
             if (privateKey) throw new PrivateKeyAlreadyExistsError();
-            await this.publishCardThenSavePrivateKeyLocal({ previousCard: cards[0] });
+            await this.publishCardThenSavePrivateKeyLocal({ previousCard: cards[0], extraFields });
         } finally {
             this.inProcess = false;
         }
@@ -248,6 +266,7 @@ export abstract class AbstractEThree {
     async encrypt(
         message: Data,
         recipients?: ICard | FindUsersResult | IPublicKey | LookupResult,
+        encryptForSelf = true,
     ): Promise<NodeBuffer | string> {
         const shouldReturnString = isString(message);
 
@@ -256,7 +275,7 @@ export abstract class AbstractEThree {
             throw new MissingPrivateKeyError();
         }
 
-        const publicKeys = this.getPublicKeysForEncryption(privateKey, recipients);
+        const publicKeys = this.getPublicKeysForEncryption(privateKey, recipients, encryptForSelf);
         if (!publicKeys) {
             throw new TypeError(
                 'Could not get public keys from the second argument.\n' +
@@ -354,13 +373,17 @@ export abstract class AbstractEThree {
     authEncrypt(message: Data, publicKey: IPublicKey): Promise<NodeBuffer | string>;
     authEncrypt(message: Data, card: ICard): Promise<NodeBuffer | string>;
     authEncrypt(message: Data, users: FindUsersResult): Promise<NodeBuffer | string>;
-    async authEncrypt(arg0: Data, arg1?: IPublicKey | ICard | FindUsersResult) {
+    async authEncrypt(
+        arg0: Data,
+        arg1?: IPublicKey | ICard | FindUsersResult,
+        encryptForSelf = true,
+    ) {
         const returnString = isString(arg0);
         const privateKey = await this.keyLoader.loadLocalPrivateKey();
         if (!privateKey) {
             throw new MissingPrivateKeyError();
         }
-        const publicKeys = this.getPublicKeysForEncryption(privateKey, arg1);
+        const publicKeys = this.getPublicKeysForEncryption(privateKey, arg1, encryptForSelf);
         if (!publicKeys) {
             throw new TypeError(
                 'Could not get public keys from the second argument.\n' +
@@ -428,7 +451,12 @@ export abstract class AbstractEThree {
      * more than one Virgil Card, which is not allowed with E3kit.
      */
     async findUsers(identities: string[]): Promise<FindUsersResult>;
-    async findUsers(identities: string[] | string): Promise<ICard | FindUsersResult> {
+    async findUsers(
+        identities: string[] | string,
+        cardFilter = (card: ICard) => {
+            return true;
+        },
+    ): Promise<ICard | FindUsersResult> {
         if (!identities) {
             throw new TypeError('Argument "identities" is required');
         }
@@ -455,6 +483,9 @@ export abstract class AbstractEThree {
         for (const identityChunk of identityChunks) {
             const cards = await this.cardManager.searchCards(identityChunk);
             for (const card of cards) {
+                if (!cardFilter(card)) {
+                    continue;
+                }
                 if (result[card.identity]) {
                     identitiesWithMultipleCards.add(card.identity);
                 }
@@ -580,7 +611,7 @@ export abstract class AbstractEThree {
      *                                 there is no Virgil Card for this identity)
      * @throws {MultipleCardsError} If there is more than one Virgil Card for this identity
      */
-    async unregister(): Promise<void> {
+    async unregister(allowMultipleCards = false): Promise<void> {
         if (this.inProcess) {
             this.throwIllegalInvocationError('unregister');
         }
@@ -588,14 +619,16 @@ export abstract class AbstractEThree {
         try {
             const cards = await this.cardManager.searchCards(this.identity);
 
-            if (cards.length > 1) {
+            if (!allowMultipleCards && cards.length > 1) {
                 throw new MultipleCardsError(this.identity);
             }
             if (cards.length === 0) {
                 throw new RegisterRequiredError();
             }
 
-            await this.cardManager.revokeCard(cards[0].id);
+            for (const card of cards) {
+                await this.cardManager.revokeCard(card.id);
+            }
             await this.keyLoader.resetLocalPrivateKey();
             await this.onPrivateKeyDeleted();
         } finally {
@@ -660,6 +693,7 @@ export abstract class AbstractEThree {
     private async publishCardThenSavePrivateKeyLocal(options: {
         keyPair?: IKeyPair;
         previousCard?: ICard;
+        extraFields?: IExtraData;
     }) {
         const { keyPair, previousCard } = options;
         const myKeyPair = keyPair || this.virgilCrypto.generateKeys(this.keyPairType);
@@ -667,6 +701,7 @@ export abstract class AbstractEThree {
             privateKey: myKeyPair.privateKey,
             publicKey: myKeyPair.publicKey,
             previousCardId: previousCard ? previousCard.id : undefined,
+            extraFields: options.extraFields,
         });
         await this.keyLoader.savePrivateKeyLocal(myKeyPair.privateKey);
         return {
@@ -714,6 +749,7 @@ export abstract class AbstractEThree {
     protected getPublicKeysForEncryption(
         ownPrivateKey: IPrivateKey,
         recipients?: ICard | FindUsersResult | IPublicKey | LookupResult,
+        encryptForSelf = true,
     ): IPublicKey[] | null {
         let publicKeys: IPublicKey[];
         if (recipients == null) {
@@ -738,7 +774,9 @@ export abstract class AbstractEThree {
             return null;
         }
 
-        this.addOwnPublicKey(ownPrivateKey, publicKeys);
+        if (encryptForSelf) {
+            this.addOwnPublicKey(ownPrivateKey, publicKeys);
+        }
         return publicKeys;
     }
 
