@@ -71,7 +71,9 @@ export class EThree extends AbstractEThree {
             },
         });
         if (isInvalidPath(opts.groupStorageName!)) {
-            throw new TypeError('`groupStorageName` is not a valid path');
+            throw new TypeError(
+                `'groupStorageName' is not a valid path (${opts.groupStorageName})`,
+            );
         }
         mkdirp.sync(opts.groupStorageName!);
         const groupStorageLeveldown = leveldown(opts.groupStorageName!);
