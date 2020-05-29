@@ -9,6 +9,12 @@ npm install
 cd ..
 cd ..
 
+rm -rf ../netcountable-e3kit/e3kit-base
+mkdir ../netcountable-e3kit/e3kit-base
+cp ./packages/e3kit-base/declarations.d.ts ../netcountable-e3kit/e3kit-base
+cp ./packages/e3kit-base/package.json ../netcountable-e3kit/e3kit-base
+cp -r ./packages/e3kit-base/dist ../netcountable-e3kit/e3kit-base
+
 rm -rf ../netcountable-e3kit/e3kit-browser
 mkdir ../netcountable-e3kit/e3kit-browser
 cp ./packages/e3kit-browser/browser.es.js ../netcountable-e3kit/e3kit-browser
