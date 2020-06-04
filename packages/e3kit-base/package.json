@@ -28,7 +28,7 @@
         "levelup": "^4.3.2",
         "subleveldown": "^4.1.4",
         "virgil-pythia": "^1.0.1",
-        "virgil-sdk": "^6.1.1"
+        "virgil-sdk": "^6.1.2"
     },
     "devDependencies": {
         "@types/chai": "^4.2.7",
