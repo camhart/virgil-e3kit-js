@@ -1,11 +1,11 @@
 cd ./packages/e3kit-base
-npm install
+yarn install
 cd ..
 cd ./e3kit-browser
-npm install
+yarn install
 cd ..
 cd ./e3kit-node
-npm install
+yarn install
 cd ..
 cd ..
 
